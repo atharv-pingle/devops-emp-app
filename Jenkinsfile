@@ -11,16 +11,17 @@ pipeline {
         DOCKER_IMAGE_FRONTEND = "asp0217/employee-frontend"
         DOCKER_IMAGE_BACKEND = "asp0217/employee-backend"
         GIT_REPO_URL = "https://github.com/atharv-pingle/devops-emp-app.git"
-        // Get EC2 Public IP for accessing services
-        EC2_PUBLIC_IP = sh(script: 'curl -s http://169.254.169.254/latest/meta-data/public-ipv4', returnStdout: true).trim()
     }
     
     stages {
         stage('Install Tools') {
             steps {
                 sh '''
-                    # Install basic utilities
+                    # Install basic utilities including curl first
                     apk add --no-cache curl git sudo bash socat
+
+                    # Get EC2 Public IP after curl is installed
+                    export EC2_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
 
                     # Install kubectl
                     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -109,7 +110,7 @@ pipeline {
                     # Wait for ArgoCD server to be ready
                     kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
                     
-                    # Port forward in background for local access (this is crucial for argocd login)
+                    # Port forward in background for local access
                     nohup kubectl port-forward svc/argocd-server -n argocd 8080:443 --address='0.0.0.0' &
                     
                     # Wait for port-forward to be ready
@@ -121,6 +122,9 @@ pipeline {
         stage('Configure ArgoCD') {
             steps {
                 sh '''
+                    # Get EC2 Public IP for the configuration
+                    EC2_PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+                    
                     # Wait for password secret
                     kubectl wait --for=condition=available --timeout=300s secret/argocd-initial-admin-secret -n argocd
                     
@@ -176,12 +180,14 @@ pipeline {
     
     post {
         always {
-            sh '''
-                # Kill port-forward process
-                pkill kubectl || true
-                docker logout
-                cleanWs()
-            '''
+            node {  // Added node block for post actions
+                sh '''
+                    # Kill port-forward process
+                    pkill kubectl || true
+                    docker logout
+                '''
+                cleanWs()  // Moved cleanWs outside of sh block
+            }
         }
     }
 }
