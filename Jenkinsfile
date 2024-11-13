@@ -24,17 +24,18 @@ pipeline {
                         -v ${WORKSPACE}/backend:/app 
                         -v ${WORKSPACE}/.go:/go 
                         -w /app
-                        --group-add \$(stat -c '%g' /var/run/docker.sock)
                     """
                     reuseNode true
                 }
             }
             steps {
-                sh '''
-                    mkdir -p "${GOPATH}/pkg"
-                    go mod download
-                    go build -o app .
-                '''
+                dir('backend') {
+                    sh '''
+                        mkdir -p "${GOPATH}/pkg"
+                        go mod download
+                        go build -o app .
+                    '''
+                }
             }
         }
 
@@ -46,21 +47,25 @@ pipeline {
                         -v ${WORKSPACE}/frontend:/app 
                         -v ${WORKSPACE}/.node_modules:/app/node_modules 
                         -w /app
-                        --group-add \$(stat -c '%g' /var/run/docker.sock)
                     """
                     reuseNode true
                 }
             }
             steps {
-                sh '''
-                    if [ -d "${NODE_MODULES_CACHE}" ]; then
-                        echo "Using cached node_modules"
-                    else
-                        echo "Installing dependencies"
-                        npm install
-                    fi
-                    npm run build
-                '''
+                dir('frontend') {
+                    sh '''
+                        if [ -d "${NODE_MODULES_CACHE}" ]; then
+                            echo "Using cached node_modules"
+                            cp -r ${NODE_MODULES_CACHE}/* node_modules/
+                        else
+                            echo "Installing dependencies"
+                            npm install
+                            mkdir -p ${NODE_MODULES_CACHE}
+                            cp -r node_modules/* ${NODE_MODULES_CACHE}/
+                        fi
+                        npm run build
+                    '''
+                }
             }
         }
 
