@@ -67,8 +67,8 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
           sh '''
-            git config user.email "your-email@example.com"
-            git config user.name "Atharv Pingle"
+            git config user.email "atharvpingle@gmail.com"
+            git config user.name "atharv-pingle"
             BUILD_NUMBER=${BUILD_NUMBER}
             sed -i "s/replaceBackendImageTag/${BACKEND_IMAGE_NAME}:${env.BUILD_NUMBER}/g" backend/deployment.yml
             sed -i "s/replaceFrontendImageTag/${FRONTEND_IMAGE_NAME}:${env.BUILD_NUMBER}/g" frontend/deployment.yml
