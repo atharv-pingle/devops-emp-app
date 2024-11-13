@@ -1,4 +1,6 @@
 pipeline {
+  agent none  // Set global agent to none to use stage-specific agents
+  
   environment {
     DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
     BACKEND_IMAGE_NAME = "asp0217/employee-backend"
@@ -7,6 +9,7 @@ pipeline {
 
   stages {
     stage('Checkout') {
+      agent any  // Use Jenkins default agent for the checkout stage
       steps {
         git branch: 'main', url: 'https://github.com/atharv-pingle/devops-emp-app.git'
       }
@@ -15,14 +18,14 @@ pipeline {
     stage('Build Backend') {
       agent {
         docker {
-          image 'golang:1.20'  // Use an official Go Docker image with Go pre-installed
-          args '-v $WORKSPACE/backend:/app -w /app'  // Mount backend directory into the container
+          image 'golang:1.20'  // Use an official Go Docker image
+          args '-v $WORKSPACE/backend:/app -w /app'
         }
       }
       steps {
-        sh 'ls -ltr' // List files to verify context
-        sh 'go mod download' // Download Go dependencies
-        sh 'go build -o app .' // Build the Go backend
+        sh 'ls -ltr'
+        sh 'go mod download'
+        sh 'go build -o app .'
       }
     }
 
@@ -30,13 +33,13 @@ pipeline {
       agent {
         docker {
           image 'node:18'  // Use an official Node.js Docker image
-          args '-v $WORKSPACE/frontend:/app -w /app'  // Mount frontend directory into the container
+          args '-v $WORKSPACE/frontend:/app -w /app'
         }
       }
       steps {
-        sh 'ls -ltr' // List files to verify context
-        sh 'npm install' // Install Node dependencies
-        sh 'npm run build' // Build the React frontend
+        sh 'ls -ltr'
+        sh 'npm install'
+        sh 'npm run build'
       }
     }
 
