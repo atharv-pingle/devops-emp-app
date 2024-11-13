@@ -1,16 +1,10 @@
 pipeline {
-    agent {
-        docker {
-            image 'docker:dind'  // Docker-in-Docker image
-            args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'  // Allow Docker commands
-        }
-    }
+    agent any  // Use Jenkins agent initially
 
     environment {
         DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
         BACKEND_IMAGE_NAME = "asp0217/employee-backend"
         FRONTEND_IMAGE_NAME = "asp0217/employee-frontend"
-        // Added cache directories for dependencies
         GOPATH = "${WORKSPACE}/.go"
         NODE_MODULES_CACHE = "${WORKSPACE}/.node_modules"
     }
@@ -22,29 +16,32 @@ pipeline {
             }
         }
 
+        stage('Setup Docker Permissions') {
+            steps {
+                sh '''
+                    sudo chown jenkins:docker /var/run/docker.sock
+                    sudo chmod 666 /var/run/docker.sock
+                '''
+            }
+        }
+
         stage('Build Backend') {
             agent {
                 docker {
                     image 'golang:1.20'
                     args """
-                        -v ${env.WORKSPACE}/backend:/app 
-                        -v ${env.GOPATH}:/go 
+                        -v ${WORKSPACE}/backend:/app 
+                        -v ${WORKSPACE}/.go:/go 
                         -w /app
-                        --network host
                     """
                     reuseNode true
                 }
             }
             steps {
                 sh '''
-                    # Create cache directory if it doesn't exist
                     mkdir -p "${GOPATH}/pkg"
-                    
-                    # Download dependencies with caching
-                    GOPATH=${GOPATH} go mod download
-                    
-                    # Build the application
-                    GOPATH=${GOPATH} go build -o app .
+                    go mod download
+                    go build -o app .
                 '''
             }
         }
@@ -54,27 +51,21 @@ pipeline {
                 docker {
                     image 'node:18'
                     args """
-                        -v ${env.WORKSPACE}/frontend:/app 
-                        -v ${env.NODE_MODULES_CACHE}:/app/node_modules 
+                        -v ${WORKSPACE}/frontend:/app 
+                        -v ${WORKSPACE}/.node_modules:/app/node_modules 
                         -w /app
-                        --network host
                     """
                     reuseNode true
                 }
             }
             steps {
                 sh '''
-                    # Use cached node_modules if available
                     if [ -d "${NODE_MODULES_CACHE}" ]; then
                         echo "Using cached node_modules"
                     else
                         echo "Installing dependencies"
                         npm install
-                        # Cache the node_modules
-                        cp -r node_modules/* ${NODE_MODULES_CACHE}/
                     fi
-                    
-                    # Build the application
                     npm run build
                 '''
             }
@@ -83,18 +74,25 @@ pipeline {
         stage('Build and Push Docker Images') {
             steps {
                 script {
-                    // Build backend image with cache
-                    docker.build("${BACKEND_IMAGE_NAME}:${env.BUILD_NUMBER}", 
-                        "--build-arg GOPATH=${GOPATH} -f backend/Dockerfile backend/")
+                    // Build backend image
+                    sh """
+                        cd backend
+                        docker build -t ${BACKEND_IMAGE_NAME}:${BUILD_NUMBER} .
+                    """
 
-                    // Build frontend image with cache
-                    docker.build("${FRONTEND_IMAGE_NAME}:${env.BUILD_NUMBER}", 
-                        "--build-arg NODE_MODULES_CACHE=${NODE_MODULES_CACHE} -f frontend/Dockerfile frontend/")
+                    // Build frontend image
+                    sh """
+                        cd frontend
+                        docker build -t ${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER} .
+                    """
 
-                    // Push images
-                    docker.withRegistry('', 'docker-hub-credentials') {
-                        docker.image("${BACKEND_IMAGE_NAME}:${env.BUILD_NUMBER}").push()
-                        docker.image("${FRONTEND_IMAGE_NAME}:${env.BUILD_NUMBER}").push()
+                    // Login to Docker Hub
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+                            docker push ${BACKEND_IMAGE_NAME}:${BUILD_NUMBER}
+                            docker push ${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER}
+                        """
                     }
                 }
             }
@@ -110,8 +108,8 @@ pipeline {
                     sh '''
                         git config user.email "atharvpingle@gmail.com"
                         git config user.name "atharv-pingle"
-                        sed -i "s|replaceBackendImageTag|${BACKEND_IMAGE_NAME}:${env.BUILD_NUMBER}|g" backend/deployment.yml
-                        sed -i "s|replaceFrontendImageTag|${FRONTEND_IMAGE_NAME}:${env.BUILD_NUMBER}|g" frontend/deployment.yml
+                        sed -i "s|replaceBackendImageTag|${BACKEND_IMAGE_NAME}:${BUILD_NUMBER}|g" backend/deployment.yml
+                        sed -i "s|replaceFrontendImageTag|${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER}|g" frontend/deployment.yml
                         git add backend/deployment.yml frontend/deployment.yml
                         git commit -m "Update backend and frontend images to latest version"
                         git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
@@ -123,8 +121,10 @@ pipeline {
 
     post {
         always {
-            // Cleanup cached dependencies if needed
+            // Cleanup
             sh '''
+                docker rmi ${BACKEND_IMAGE_NAME}:${BUILD_NUMBER} || true
+                docker rmi ${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER} || true
                 rm -rf ${GOPATH}
                 rm -rf ${NODE_MODULES_CACHE}
             '''
