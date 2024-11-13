@@ -36,11 +36,13 @@ pipeline {
                 }
             }
             steps {
-                sh '''
-                    export GOPATH=/go
-                    go mod download
-                    CGO_ENABLED=0 GOOS=linux go build -o app
-                '''
+                dir('backend') {
+                    sh '''
+                        export GOPATH=/go
+                        go mod download
+                        go build -o app
+                    '''
+                }
             }
         }
 
@@ -53,11 +55,12 @@ pipeline {
                 }
             }
             steps {
-                sh '''
-                    npm config set cache ${WORKSPACE}/.npm-cache
-                    npm ci
-                    npm run build
-                '''
+                dir('frontend') {
+                    sh '''
+                        npm install
+                        npm run build
+                    '''
+                }
             }
         }
 
@@ -65,12 +68,16 @@ pipeline {
             steps {
                 script {
                     // Build backend image
-                    docker.build("${BACKEND_IMAGE_NAME}:${BUILD_NUMBER}", "./backend")
-                    
-                    // Build frontend image
-                    docker.build("${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER}", "./frontend")
+                    dir('backend') {
+                        sh "docker build -t ${BACKEND_IMAGE_NAME}:${BUILD_NUMBER} ."
+                    }
 
-                    // Login and push to Docker Hub
+                    // Build frontend image
+                    dir('frontend') {
+                        sh "docker build -t ${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER} ."
+                    }
+
+                    // Login to Docker Hub and push images
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
                             echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
@@ -92,14 +99,10 @@ pipeline {
                     sh '''
                         git config user.email "atharvpingle@gmail.com"
                         git config user.name "atharv-pingle"
-                        
-                        # Update deployment files
                         sed -i "s|replaceBackendImageTag|${BACKEND_IMAGE_NAME}:${BUILD_NUMBER}|g" backend/deployment.yml
                         sed -i "s|replaceFrontendImageTag|${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER}|g" frontend/deployment.yml
-                        
-                        # Commit and push changes
                         git add backend/deployment.yml frontend/deployment.yml
-                        git commit -m "Update deployment images to version ${BUILD_NUMBER}"
+                        git commit -m "Update backend and frontend images to latest version"
                         git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                     '''
                 }
@@ -109,10 +112,11 @@ pipeline {
 
     post {
         always {
+            // Cleanup
             sh '''
                 docker rmi ${BACKEND_IMAGE_NAME}:${BUILD_NUMBER} || true
                 docker rmi ${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER} || true
-                rm -rf ${WORKSPACE}/.npm-cache || true
+                rm -rf ${WORKSPACE}/.npm-cache
             '''
             cleanWs()
         }
