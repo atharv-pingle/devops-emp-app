@@ -5,7 +5,7 @@ pipeline {
         BACKEND_IMAGE = "asp0217/employee-backend:${BUILD_NUMBER}"
         FRONTEND_IMAGE = "asp0217/employee-frontend:${BUILD_NUMBER}"
         NPM_CONFIG_CACHE = "${WORKSPACE}/.npm"
-        DOCKER_BUILDKIT = '1'  // Enable BuildKit for Docker builds
+       
     }
     stages {
         stage('Checkout') {
