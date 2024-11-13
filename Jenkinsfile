@@ -1,5 +1,5 @@
 pipeline {
-    agent any  // Use Jenkins agent initially
+    agent any
 
     environment {
         DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
@@ -16,15 +16,6 @@ pipeline {
             }
         }
 
-        stage('Setup Docker Permissions') {
-            steps {
-                sh '''
-                    sudo chown jenkins:docker /var/run/docker.sock
-                    sudo chmod 666 /var/run/docker.sock
-                '''
-            }
-        }
-
         stage('Build Backend') {
             agent {
                 docker {
@@ -33,6 +24,7 @@ pipeline {
                         -v ${WORKSPACE}/backend:/app 
                         -v ${WORKSPACE}/.go:/go 
                         -w /app
+                        --group-add \$(stat -c '%g' /var/run/docker.sock)
                     """
                     reuseNode true
                 }
@@ -54,6 +46,7 @@ pipeline {
                         -v ${WORKSPACE}/frontend:/app 
                         -v ${WORKSPACE}/.node_modules:/app/node_modules 
                         -w /app
+                        --group-add \$(stat -c '%g' /var/run/docker.sock)
                     """
                     reuseNode true
                 }
@@ -86,7 +79,7 @@ pipeline {
                         docker build -t ${FRONTEND_IMAGE_NAME}:${BUILD_NUMBER} .
                     """
 
-                    // Login to Docker Hub
+                    // Login to Docker Hub and push images
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
                             echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
