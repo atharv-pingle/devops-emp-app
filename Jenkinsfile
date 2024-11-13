@@ -1,19 +1,18 @@
 pipeline {
     agent any
-
     environment {
         DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
         BACKEND_IMAGE = "asp0217/employee-backend:${BUILD_NUMBER}"
         FRONTEND_IMAGE = "asp0217/employee-frontend:${BUILD_NUMBER}"
+        // Add npm cache environment variable
+        NPM_CONFIG_CACHE = "${WORKSPACE}/.npm"
     }
-
     stages {
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/atharv-pingle/devops-emp-app.git'
             }
         }
-
         stage('Build Backend') {
             agent {
                 docker {
@@ -32,21 +31,27 @@ pipeline {
                 }
             }
         }
-
         stage('Build Frontend') {
             agent {
                 docker {
                     image 'node:18'
                     reuseNode true
+                    args '-u root:root' // Run as root to avoid permission issues
                 }
             }
             steps {
                 dir('frontend') {
-                    sh 'npm ci && npm run build'
+                    // Create and set permissions for npm cache directory
+                    sh '''
+                        mkdir -p ${NPM_CONFIG_CACHE}
+                        chown -R $(id -u):$(id -g) ${NPM_CONFIG_CACHE}
+                        npm config set cache ${NPM_CONFIG_CACHE}
+                        npm ci --unsafe-perm
+                        npm run build
+                    '''
                 }
             }
         }
-
         stage('Build & Push Docker Images') {
             steps {
                 script {
@@ -55,7 +60,6 @@ pipeline {
                         cd backend && docker build -t ${BACKEND_IMAGE} .
                         cd ../frontend && docker build -t ${FRONTEND_IMAGE} .
                     """
-
                     // Push Images
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
@@ -67,7 +71,6 @@ pipeline {
                 }
             }
         }
-
         stage('Update Deployment Files') {
             steps {
                 withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
@@ -86,7 +89,6 @@ pipeline {
             }
         }
     }
-
     post {
         always {
             sh """
