@@ -4,8 +4,8 @@ pipeline {
         DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
         BACKEND_IMAGE = "asp0217/employee-backend:${BUILD_NUMBER}"
         FRONTEND_IMAGE = "asp0217/employee-frontend:${BUILD_NUMBER}"
-        // Add npm cache environment variable
         NPM_CONFIG_CACHE = "${WORKSPACE}/.npm"
+        DOCKER_BUILDKIT = '1'  // Enable BuildKit for Docker builds
     }
     stages {
         stage('Checkout') {
@@ -41,7 +41,6 @@ pipeline {
             }
             steps {
                 dir('frontend') {
-                    // Create and set permissions for npm cache directory
                     sh '''
                         mkdir -p ${NPM_CONFIG_CACHE}
                         chown -R $(id -u):$(id -g) ${NPM_CONFIG_CACHE}
@@ -55,11 +54,16 @@ pipeline {
         stage('Build & Push Docker Images') {
             steps {
                 script {
-                    // Build Images
-                    sh """
-                        cd backend && docker build -t ${BACKEND_IMAGE} .
-                        cd ../frontend && docker build -t ${FRONTEND_IMAGE} .
-                    """
+                    // Build Backend Image
+                    dir('backend') {
+                        sh "docker build -t ${BACKEND_IMAGE} ."
+                    }
+                    
+                    // Build Frontend Image
+                    dir('frontend') {
+                        sh "docker build -t ${FRONTEND_IMAGE} ."
+                    }
+                    
                     // Push Images
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
@@ -71,18 +75,18 @@ pipeline {
                 }
             }
         }
-        stage('Update Deployment Files') {
+        stage('Update k8s Deployment File') {
             steps {
                 withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
                     sh """
                         git config user.email "atharvpingle@gmail.com"
                         git config user.name "atharv-pingle"
                         
-                        sed -i "s|replaceBackendImageTag|${BACKEND_IMAGE}|g" backend/deployment.yml
-                        sed -i "s|replaceFrontendImageTag|${FRONTEND_IMAGE}|g" frontend/deployment.yml
+                        sed -i "s|replaceBackendImageTag|${BACKEND_IMAGE}|g" k8s/k8s.yml
+                        sed -i "s|replaceFrontendImageTag|${FRONTEND_IMAGE}|g" k8s/k8s.yml
                         
-                        git add backend/deployment.yml frontend/deployment.yml
-                        git commit -m "Update deployment images to version ${BUILD_NUMBER}"
+                        git add k8s/k8s.yml
+                        git commit -m "Update k8s deployment images to version ${BUILD_NUMBER}"
                         git push https://\${GITHUB_TOKEN}@github.com/atharv-pingle/devops-emp-app HEAD:main
                     """
                 }
