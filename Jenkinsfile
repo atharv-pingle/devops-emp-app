@@ -108,8 +108,8 @@ pipeline {
                         git config user.name "atharv-pingle"
                         
                         # Update image tags in k8s manifests
-                        sed -i "s|image: ${DOCKER_REGISTRY}/employee-backend:.*|image: ${BACKEND_IMAGE}|g" k8s/k8s.yml
-                        sed -i "s|image: ${DOCKER_REGISTRY}/employee-frontend:.*|image: ${FRONTEND_IMAGE}|g" k8s/k8s.yml
+                        sed -i "s|image: ${DOCKER_REGISTRY}/employee-backend:.*|image: ${BACKEND_IMAGE}|g" k8s/k8s.yaml
+                        sed -i "s|image: ${DOCKER_REGISTRY}/employee-frontend:.*|image: ${FRONTEND_IMAGE}|g" k8s/k8s.yaml
                         
                         # Commit and push changes
                         git add k8s/k8s.yml
