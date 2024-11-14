@@ -95,7 +95,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: asp0217/employee-backend:latest
+          image: asp0217/employee-backend:6
           ports:
             - containerPort: 8080
           livenessProbe:
@@ -182,7 +182,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: asp0217/employee-frontend:latest
+          image: asp0217/employee-frontend:6
           ports:
             - containerPort: 3000
           env:
