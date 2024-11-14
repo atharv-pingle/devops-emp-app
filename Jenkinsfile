@@ -82,8 +82,8 @@ pipeline {
                         git config user.email "atharvpingle@gmail.com"
                         git config user.name "atharv-pingle"
                         
-                        sed -i "s|replaceBackendImageTag|${BACKEND_IMAGE}|g" k8s/k8s.yml
-                        sed -i "s|replaceFrontendImageTag|${FRONTEND_IMAGE}|g" k8s/k8s.yml
+                        sed -i "s|asp0217/employee-backend|${BACKEND_IMAGE}|g" k8s/k8s.yml
+                        sed -i "s|asp0217/employee-frontend|${BACKEND_IMAGE}|g" k8s/k8s.yml
                         
                         git add k8s/k8s.yml
                         git commit -m "Update k8s deployment images to version ${BUILD_NUMBER}"
