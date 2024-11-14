@@ -23,7 +23,7 @@ pipeline {
         
         stage('Build Backend') {
             agent {
-                any {
+                docker {
                     image 'golang:1.20'
                     reuseNode true
                     args """
@@ -54,7 +54,7 @@ pipeline {
         
         stage('Build Frontend') {
             agent {
-                any {
+                docker {
                     image 'node:18-alpine'
                     reuseNode true
                     args """
