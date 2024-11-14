@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_REGISTRY = "asp0217"  // Your DockerHub username
+        DOCKER_REGISTRY = "asp0217"
         DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
         BACKEND_IMAGE = "${DOCKER_REGISTRY}/employee-backend:${BUILD_NUMBER}"
         FRONTEND_IMAGE = "${DOCKER_REGISTRY}/employee-frontend:${BUILD_NUMBER}"
@@ -24,16 +24,32 @@ pipeline {
                 docker {
                     image 'golang:1.20'
                     reuseNode true
-                    args '-v $HOME/.go:/go'
+                    // Modified args to use workspace for Go cache
+                    args '-v ${WORKSPACE}/go-cache:/go'
                 }
             }
             steps {
                 dir('backend') {
                     sh '''
+                        # Create and set permissions for Go cache directories
+                        mkdir -p ${WORKSPACE}/go-cache
+                        chmod -R 777 ${WORKSPACE}/go-cache
+                        
+                        # Set Go environment variables to use workspace
+                        export GOCACHE=${WORKSPACE}/go-cache/go-build
+                        export GOPATH=${WORKSPACE}/go-cache
+                        
+                        # Build the application
                         go mod download
                         go mod verify
                         CGO_ENABLED=0 GOOS=linux go build -o app
                     '''
+                }
+            }
+            post {
+                always {
+                    // Clean up Go cache after build
+                    sh 'rm -rf ${WORKSPACE}/go-cache'
                 }
             }
         }
