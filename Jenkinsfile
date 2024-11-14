@@ -8,7 +8,7 @@ pipeline {
         FRONTEND_IMAGE = "${DOCKER_REGISTRY}/employee-frontend:${BUILD_NUMBER}"
         NPM_CONFIG_CACHE = "${WORKSPACE}/.npm"
         GITHUB_REPO = "atharv-pingle/devops-emp-app"
-        // Set Go environment variables to use workspace-relative paths
+        // Set Go environment variables
         GOCACHE = "${WORKSPACE}/.gocache"
         GOPATH = "${WORKSPACE}/.go"
     }
@@ -30,6 +30,7 @@ pipeline {
                         -u root:root
                         -e GOCACHE=${WORKSPACE}/.gocache
                         -e GOPATH=${WORKSPACE}/.go
+                        -e GO111MODULE=on
                         -v ${WORKSPACE}/.gocache:${WORKSPACE}/.gocache
                         -v ${WORKSPACE}/.go:${WORKSPACE}/.go
                     """
@@ -38,14 +39,14 @@ pipeline {
             steps {
                 dir('backend') {
                     sh '''
-                        # Create cache directories with proper permissions
+                        # Create cache directories
                         mkdir -p ${GOCACHE}
                         mkdir -p ${GOPATH}
                         
                         # Download dependencies and build
                         go mod download
                         go mod verify
-                        CGO_ENABLED=0 GOOS=linux go build -o app
+                        CGO_ENABLED=0 GOOS=linux go build -buildvcs=false -o app
                     '''
                 }
             }
