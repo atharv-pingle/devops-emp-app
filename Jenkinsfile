@@ -112,7 +112,7 @@ pipeline {
                         sed -i "s|image: ${DOCKER_REGISTRY}/employee-frontend:.*|image: ${FRONTEND_IMAGE}|g" k8s/k8s.yaml
                         
                         # Commit and push changes
-                        git add k8s/k8s.yml
+                        git add k8s/k8s.yaml
                         git commit -m "Update k8s deployment images to version ${BUILD_NUMBER}" || true
                         git push https://\${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git HEAD:main
                     """
