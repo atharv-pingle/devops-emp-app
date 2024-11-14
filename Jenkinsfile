@@ -8,14 +8,16 @@ pipeline {
         FRONTEND_IMAGE = "${DOCKER_REGISTRY}/employee-frontend:${BUILD_NUMBER}"
         NPM_CONFIG_CACHE = "${WORKSPACE}/.npm"
         GITHUB_REPO = "atharv-pingle/devops-emp-app"
+        // Set Go environment variables to use workspace-relative paths
+        GOCACHE = "${WORKSPACE}/.gocache"
+        GOPATH = "${WORKSPACE}/.go"
     }
     
     stages {
         stage('Checkout') {
             steps {
                 git branch: 'main', 
-                    url: "https://github.com/${GITHUB_REPO}.git",
-                    credentialsId: 'github'
+                    url: "https://github.com/${GITHUB_REPO}.git"
             }
         }
         
@@ -24,32 +26,27 @@ pipeline {
                 docker {
                     image 'golang:1.20'
                     reuseNode true
-                    // Modified args to use workspace for Go cache
-                    args '-v ${WORKSPACE}/go-cache:/go'
+                    args """
+                        -u root:root
+                        -e GOCACHE=${WORKSPACE}/.gocache
+                        -e GOPATH=${WORKSPACE}/.go
+                        -v ${WORKSPACE}/.gocache:${WORKSPACE}/.gocache
+                        -v ${WORKSPACE}/.go:${WORKSPACE}/.go
+                    """
                 }
             }
             steps {
                 dir('backend') {
                     sh '''
-                        # Create and set permissions for Go cache directories
-                        mkdir -p ${WORKSPACE}/go-cache
-                        chmod -R 777 ${WORKSPACE}/go-cache
+                        # Create cache directories with proper permissions
+                        mkdir -p ${GOCACHE}
+                        mkdir -p ${GOPATH}
                         
-                        # Set Go environment variables to use workspace
-                        export GOCACHE=${WORKSPACE}/go-cache/go-build
-                        export GOPATH=${WORKSPACE}/go-cache
-                        
-                        # Build the application
+                        # Download dependencies and build
                         go mod download
                         go mod verify
                         CGO_ENABLED=0 GOOS=linux go build -o app
                     '''
-                }
-            }
-            post {
-                always {
-                    // Clean up Go cache after build
-                    sh 'rm -rf ${WORKSPACE}/go-cache'
                 }
             }
         }
@@ -59,7 +56,10 @@ pipeline {
                 docker {
                     image 'node:18-alpine'
                     reuseNode true
-                    args '-u root:root'
+                    args """
+                        -u root:root
+                        -e HOME=${WORKSPACE}
+                    """
                 }
             }
             steps {
@@ -126,6 +126,9 @@ pipeline {
                 docker rmi ${BACKEND_IMAGE} || true
                 docker rmi ${FRONTEND_IMAGE} || true
                 docker system prune -f
+                rm -rf ${WORKSPACE}/.gocache
+                rm -rf ${WORKSPACE}/.go
+                rm -rf ${WORKSPACE}/.npm
             """
             cleanWs()
         }
