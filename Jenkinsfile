@@ -23,7 +23,7 @@ pipeline {
         
         stage('Build Backend') {
             agent {
-                docker {
+                any {
                     image 'golang:1.20'
                     reuseNode true
                     args """
