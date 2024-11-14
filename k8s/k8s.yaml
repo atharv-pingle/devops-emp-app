@@ -163,7 +163,7 @@ kind: ConfigMap
 metadata:
   name: frontend-config
 data:
-  REACT_APP_SERVER_URL: "http://192.168.49.2:30080/employees"
+  REACT_APP_SERVER_URL: "http://3.91.186.146:30080/employees"
 
 ---
 apiVersion: apps/v1
